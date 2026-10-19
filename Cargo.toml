@@ -1,0 +1,31 @@
+[package]
+name = "scacchi"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0-or-later"
+description = "Chess rules for Swift: legal moves, SAN, FEN and every ending, built on shakmaty"
+publish = false
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["cli"]
+
+[dependencies]
+shakmaty = "=0.30.2"
+thiserror = "2"
+uniffi = "=0.32.2"
+
+[features]
+# Only for the uniffi-bindgen binary, so the bindings generator stays out of the library.
+cli = ["uniffi/cli"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3
+strip = "debuginfo"

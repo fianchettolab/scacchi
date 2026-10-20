@@ -465,6 +465,38 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+    typealias FfiType = UInt8
+    typealias SwiftType = UInt8
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
+    typealias FfiType = UInt32
+    typealias SwiftType = UInt32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -540,7 +572,19 @@ fileprivate struct FfiConverterString: FfiConverter {
  */
 public protocol GameProtocol: AnyObject, Sendable {
     
+    func board()  -> BoardState
+    
+    /**
+     * The pieces giving check, a1 first; empty when not in check.
+     */
+    func checkers()  -> [Piece]
+    
     func fen()  -> String
+    
+    /**
+     * The move number, from the FEN's last field: 1 at the start, up by one after Black moves.
+     */
+    func fullmoves()  -> UInt32
     
     func isCheck()  -> Bool
     
@@ -550,9 +594,9 @@ public protocol GameProtocol: AnyObject, Sendable {
     func legalMoves()  -> [String]
     
     /**
-     * Plays a UCI move and returns its SAN.
+     * Plays a UCI move.
      */
-    func play(uci: String) throws  -> String
+    func play(uci: String) throws  -> PlayedMove
     
     /**
      * The move's SAN in the current position, with + or #, without playing it.
@@ -640,10 +684,43 @@ public static func fromFen(fen: String)throws  -> Game  {
     
 
     
+open func board() -> BoardState  {
+    return try!  FfiConverterTypeBoardState_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_game_board(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The pieces giving check, a1 first; empty when not in check.
+     */
+open func checkers() -> [Piece]  {
+    return try!  FfiConverterSequenceTypePiece.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_game_checkers(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
 open func fen() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_scacchi_fn_method_game_fen(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The move number, from the FEN's last field: 1 at the start, up by one after Black moves.
+     */
+open func fullmoves() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_game_fullmoves(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
@@ -671,10 +748,10 @@ open func legalMoves() -> [String]  {
 }
     
     /**
-     * Plays a UCI move and returns its SAN.
+     * Plays a UCI move.
      */
-open func play(uci: String)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+open func play(uci: String)throws  -> PlayedMove  {
+    return try  FfiConverterTypePlayedMove_lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
         uniffiCallStatus in
     uniffi_scacchi_fn_method_game_play(
             self.uniffiCloneHandle(),
@@ -760,6 +837,209 @@ public func FfiConverterTypeGame_lower(_ value: Game) -> UInt64 {
 }
 
 
+
+
+/**
+ * What's on the board and who moves.
+ */
+public struct BoardState: Equatable, Hashable {
+    /**
+     * By square, a1 first.
+     */
+    public var pieces: [Piece]
+    public var turn: Side
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * By square, a1 first.
+         */pieces: [Piece], turn: Side) {
+        self.pieces = pieces
+        self.turn = turn
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension BoardState: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBoardState: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BoardState {
+        return
+            try BoardState(
+                pieces: FfiConverterSequenceTypePiece.read(from: &buf), 
+                turn: FfiConverterTypeSide.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BoardState, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypePiece.write(value.pieces, into: &buf)
+        FfiConverterTypeSide.write(value.turn, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoardState_lift(_ buf: RustBuffer) throws -> BoardState {
+    return try FfiConverterTypeBoardState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoardState_lower(_ value: BoardState) -> RustBuffer {
+    return FfiConverterTypeBoardState.lower(value)
+}
+
+
+/**
+ * A piece on its square. Squares run rank-first: a1 = 0, b1 = 1 … h1 = 7, a2 = 8 … h8 = 63.
+ */
+public struct Piece: Equatable, Hashable {
+    public var square: UInt8
+    public var color: Side
+    public var role: Role
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(square: UInt8, color: Side, role: Role) {
+        self.square = square
+        self.color = color
+        self.role = role
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Piece: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePiece: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Piece {
+        return
+            try Piece(
+                square: FfiConverterUInt8.read(from: &buf), 
+                color: FfiConverterTypeSide.read(from: &buf), 
+                role: FfiConverterTypeRole.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Piece, into buf: inout [UInt8]) {
+        FfiConverterUInt8.write(value.square, into: &buf)
+        FfiConverterTypeSide.write(value.color, into: &buf)
+        FfiConverterTypeRole.write(value.role, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePiece_lift(_ buf: RustBuffer) throws -> Piece {
+    return try FfiConverterTypePiece.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePiece_lower(_ value: Piece) -> RustBuffer {
+    return FfiConverterTypePiece.lower(value)
+}
+
+
+/**
+ * A move just played.
+ */
+public struct PlayedMove: Equatable, Hashable {
+    /**
+     * In UCI, castling as the king's two-square move (e1g1).
+     */
+    public var uci: String
+    /**
+     * With + or #.
+     */
+    public var san: String
+    /**
+     * En passant included.
+     */
+    public var isCapture: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * In UCI, castling as the king's two-square move (e1g1).
+         */uci: String, 
+        /**
+         * With + or #.
+         */san: String, 
+        /**
+         * En passant included.
+         */isCapture: Bool) {
+        self.uci = uci
+        self.san = san
+        self.isCapture = isCapture
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PlayedMove: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePlayedMove: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PlayedMove {
+        return
+            try PlayedMove(
+                uci: FfiConverterString.read(from: &buf), 
+                san: FfiConverterString.read(from: &buf), 
+                isCapture: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PlayedMove, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.uci, into: &buf)
+        FfiConverterString.write(value.san, into: &buf)
+        FfiConverterBool.write(value.isCapture, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePlayedMove_lift(_ buf: RustBuffer) throws -> PlayedMove {
+    return try FfiConverterTypePlayedMove.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePlayedMove_lower(_ value: PlayedMove) -> RustBuffer {
+    return FfiConverterTypePlayedMove.lower(value)
+}
 
 
 
@@ -923,6 +1203,100 @@ public func FfiConverterTypeGameStatus_lift(_ buf: RustBuffer) throws -> GameSta
 #endif
 public func FfiConverterTypeGameStatus_lower(_ value: GameStatus) -> RustBuffer {
     return FfiConverterTypeGameStatus.lower(value)
+}
+
+
+
+
+public enum Role: Equatable, Hashable {
+    
+    case pawn
+    case knight
+    case bishop
+    case rook
+    case queen
+    case king
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension Role: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRole: FfiConverterRustBuffer {
+    typealias SwiftType = Role
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Role {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .pawn
+        
+        case 2: return .knight
+        
+        case 3: return .bishop
+        
+        case 4: return .rook
+        
+        case 5: return .queen
+        
+        case 6: return .king
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: Role, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .pawn:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .knight:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .bishop:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .rook:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .queen:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .king:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRole_lift(_ buf: RustBuffer) throws -> Role {
+    return try FfiConverterTypeRole.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRole_lower(_ value: Role) -> RustBuffer {
+    return FfiConverterTypeRole.lower(value)
 }
 
 
@@ -1104,6 +1478,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePiece: FfiConverterRustBuffer {
+    typealias SwiftType = [Piece]
+
+    public static func write(_ value: [Piece], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePiece.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Piece] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Piece]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePiece.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -1119,7 +1518,16 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_scacchi_checksum_method_game_board() != 19751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_game_checkers() != 36714) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_scacchi_checksum_method_game_fen() != 65002) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_game_fullmoves() != 39408) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_is_check() != 25763) {
@@ -1128,7 +1536,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scacchi_checksum_method_game_legal_moves() != 59569) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_scacchi_checksum_method_game_play() != 28382) {
+    if (uniffi_scacchi_checksum_method_game_play() != 25788) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_san() != 40243) {

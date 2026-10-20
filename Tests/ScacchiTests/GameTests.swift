@@ -13,23 +13,35 @@ struct GameTests {
 
     @Test func sanForEnPassantCastlingAndPromotion() throws {
         let game = Game()
-        let sans = try ["e2e4", "g8f6", "e4e5", "d7d5", "e5d6"].map { try game.play(uci: $0) }
-        #expect(sans.last == "exd6")
+        let played = try ["e2e4", "g8f6", "e4e5", "d7d5", "e5d6"].map { try game.play(uci: $0) }
+        #expect(played.last == PlayedMove(uci: "e5d6", san: "exd6", isCapture: true))
 
         let castling = try Game.fromFen(fen: "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
         #expect(try castling.san(uci: "e1c1") == "O-O-O")
-        #expect(try castling.play(uci: "e1g1") == "O-O")
+        #expect(try castling.play(uci: "e1g1").san == "O-O")
 
         let promotion = try Game.fromFen(fen: "8/P6k/8/8/8/8/8/K7 w - - 0 1")
-        #expect(try promotion.play(uci: "a7a8q") == "a8=Q")
+        #expect(try promotion.play(uci: "a7a8q").san == "a8=Q")
     }
 
     @Test func checkmate() throws {
         let game = Game()
         for move in ["f2f3", "e7e5", "g2g4"] { _ = try game.play(uci: move) }
-        #expect(try game.play(uci: "d8h4") == "Qh4#")
+        #expect(try game.play(uci: "d8h4").san == "Qh4#")
         #expect(game.status() == .checkmate(winner: .black))
         #expect(game.isCheck())
+    }
+
+    @Test func boardAndCheckers() throws {
+        let board = Game().board()
+        #expect(board.pieces.count == 32)
+        #expect(board.pieces.first == Piece(square: 0, color: .white, role: .rook))
+        #expect(board.turn == .white)
+
+        let double = try Game.fromFen(fen: "4k3/8/5N2/8/8/8/8/K3R3 b - - 0 40")
+        #expect(double.checkers().map(\.square) == [4, 45])
+        #expect(double.checkers().map(\.role) == [.rook, .knight])
+        #expect(double.fullmoves() == 40)
     }
 
     @Test func draw() throws {

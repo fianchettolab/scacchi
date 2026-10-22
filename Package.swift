@@ -4,7 +4,7 @@ import Foundation
 import PackageDescription
 
 // The release whose XCFramework this package downloads; written by release.sh.
-let release = (version: "", checksum: "")
+let release = (version: "0.1.0", checksum: "32e37a9ed8fb87722078f1e97b9fbb339a22266ec6481c66733c5fcedb166307")
 
 // A local build (build-xcframework.sh) wins over the release, so changes to the bridge
 // show up in a checkout used as a local package override.

@@ -11,7 +11,7 @@ lib="libscacchi.a"
 out="build"
 framework="$out/ScacchiFFI.xcframework"
 
-# Matches MaiaKit's minimums.
+# Matches the package's platforms (iOS 17, macOS 14).
 export IPHONEOS_DEPLOYMENT_TARGET=17.0
 export MACOSX_DEPLOYMENT_TARGET=14.0
 

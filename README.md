@@ -6,11 +6,8 @@ behind Lichess's tools.
 
 *Scacchi* is Italian for "chess", as *shakmaty* is Russian for it.
 
-It's built for [Fianchetto Lab](https://github.com/fianchettolab/fianchetto), a chess app
-for iOS, and comes as-is. It isn't affiliated with shakmaty.
-
-> Work in progress: a spike proving shakmaty through UniFFI on iOS
-> (fianchettolab/fianchetto#39).
+It's part of [Fianchetto Lab](https://github.com/fianchettolab), a set of chess
+experiments, and comes as-is. It isn't affiliated with shakmaty.
 
 ## What it does
 

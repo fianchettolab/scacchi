@@ -1502,6 +1502,17 @@ fileprivate struct FfiConverterSequenceTypePiece: FfiConverterRustBuffer {
         return seq
     }
 }
+/**
+ * The shakmaty version built into this library, e.g. "0.30.2" (read from Cargo.lock by
+ * build.rs).
+ */
+public func shakmatyVersion() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_func_shakmaty_version(uniffiCallStatus
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -1517,6 +1528,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_scacchi_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_scacchi_checksum_func_shakmaty_version() != 56209) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_board() != 19751) {
         return InitializationResult.apiChecksumMismatch

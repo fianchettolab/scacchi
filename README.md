@@ -21,6 +21,8 @@ game.status()                // .ongoing, .checkmate(winner:), .draw(reason:)
 game.board()                 // the pieces, squares a1 = 0 … h8 = 63, and the side to move
 game.checkers()              // the pieces giving check
 game.fen()
+
+shakmatyVersion()            // "0.30.2", the shakmaty built into the library
 ```
 
 Draws cover stalemate, insufficient material, threefold repetition and the fifty-move
@@ -31,6 +33,7 @@ rule. `Game` is `Sendable`: it locks inside.
 | Path | What it is |
 |---|---|
 | `src/lib.rs` | The Rust crate: `Game` over shakmaty, exported with UniFFI's proc macros |
+| `build.rs` | Reads shakmaty's version from `Cargo.lock` for `shakmatyVersion()` |
 | `src/bin/uniffi-bindgen.rs` | UniFFI's bindings generator, pinned to the crate's version |
 | `build-xcframework.sh` | Builds `build/ScacchiFFI.xcframework` and regenerates the Swift bindings |
 | `release.sh` | Builds, zips and tags a release, writing its version and checksum into `Package.swift` |

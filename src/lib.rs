@@ -266,12 +266,29 @@ impl Default for Game {
     }
 }
 
+/// The shakmaty version built into this library, e.g. "0.30.2" (read from Cargo.lock by
+/// build.rs).
+#[uniffi::export]
+pub fn shakmaty_version() -> String {
+    env!("SCACCHI_SHAKMATY_VERSION").to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn play_all(game: &Game, moves: &[&str]) -> Vec<String> {
         moves.iter().map(|m| game.play(m.to_string()).unwrap().san).collect()
+    }
+
+    #[test]
+    fn shakmaty_version_matches_the_pin() {
+        let manifest = include_str!("../Cargo.toml");
+        let pin = manifest
+            .lines()
+            .find_map(|line| line.strip_prefix("shakmaty = \"=")?.strip_suffix('"'))
+            .unwrap();
+        assert_eq!(shakmaty_version(), pin);
     }
 
     #[test]

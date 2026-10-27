@@ -3,6 +3,10 @@ import Scacchi
 
 /// The bindings end to end: the same checks as the Rust tests, through Swift.
 struct GameTests {
+    @Test func shakmatyVersion() {
+        #expect(Scacchi.shakmatyVersion() == "0.30.2")
+    }
+
     @Test func startPosition() {
         let game = Game()
         #expect(game.legalMoves().count == 20)

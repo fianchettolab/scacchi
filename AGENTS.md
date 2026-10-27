@@ -47,6 +47,10 @@ doesn't repeat them.
   return records (`Piece`) or lists of them.
 - **Pinned exactly:** shakmaty and UniFFI (`=` versions in `Cargo.toml`). Upgrading
   either is a deliberate change, tested on both sides.
+- **`shakmatyVersion()` reports the upstream** (apps show it next to Scacchi's own
+  version). `build.rs` reads it from `Cargo.lock`, so it's what was linked. The Rust test
+  checks it against the `=` pin; the Swift test spells the version out, so a shakmaty
+  upgrade updates it too.
 - **UniFFI's `cli` feature stays off the library**, on the `uniffi-bindgen` binary only
   (`required-features`). On the library it linked the whole bindings generator in and
   took the XCFramework from 62 MB to 176 MB.

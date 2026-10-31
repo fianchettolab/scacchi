@@ -1,8 +1,9 @@
 # Scacchi
 
-Chess rules for Swift: legal moves, SAN, FEN and every ending, built on
-[shakmaty](https://github.com/niklasf/shakmaty) by Niklas Fiekas, the chess core
-behind Lichess's tools.
+Chess rules for Swift: legal moves, SAN, FEN, every ending, and Lichess study chapters
+in PGN, built on [shakmaty](https://github.com/niklasf/shakmaty) and
+[pgn-reader](https://crates.io/crates/pgn-reader) by Niklas Fiekas, the chess core behind
+Lichess's tools.
 
 *Scacchi* is Italian for "chess", as *shakmaty* is Russian for it.
 
@@ -29,11 +30,45 @@ shakmatyVersion()            // "0.30.2", the shakmaty built into the library
 Draws cover stalemate, insufficient material, threefold repetition and the fifty-move
 rule. `Game` is `Sendable`: it locks inside.
 
+### Study chapters
+
+A chapter is a PGN game as a Lichess study exports it: tags, a start position, and a tree
+of moves with variations, comments, annotations and shapes. Read and written back, it
+gives the same tree.
+
+```swift
+let chapters = try readStudy(pgn: text)   // one Chapter per game
+let chapter = chapters[0]
+chapter.name()                            // ChapterName, otherwise Event
+chapter.orientation()                     // .white or .black
+let root = try chapter.node(id: chapter.root())
+root.children                             // node ids, the main line first
+let node = try chapter.node(id: root.children[0])
+node.played                               // PlayedMove(uci: "e2e4", san: "e4", …)
+node.moveNumber; node.side; node.fen
+node.comments                             // after the move; startingComments before it
+node.annotations                          // moveMark (!?), positionSign (±), others ($146)
+node.shapes                               // [%cal]/[%csl]: DrawShape(brush: .green, from: 12, to: 28)
+node.commands                             // other [%…], kept as read: ["[%clk 0:03:00]"]
+
+let id = try chapter.addMove(after: node.id, uci: "e7e5")  // the same move steps forward
+try chapter.setComments(id: id, comments: ["The classical reply."])
+try chapter.setAnnotations(id: id, annotations: Annotations(moveMark: .good, positionSign: nil, others: []))
+chapter.pgn()                             // writeStudy(chapters:) for several
+```
+
+Comments, annotations and shapes follow chessops, Lichess's TypeScript library: a comment
+before a move only starts a variation, one after `)` belongs to the move the variation
+replaced, and shapes are `[%csl Ge4]` and `[%cal Ge2e4]` with the brushes G, R, Y and B.
+Bad PGN (an illegal move, an unmatched bracket, a variant other than standard chess)
+throws `ScacchiError.invalidPgn`, naming the chapter and the move.
+
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `src/lib.rs` | The Rust crate: `Game` over shakmaty, exported with UniFFI's proc macros |
+| `src/pgn.rs` | Study chapters: the tree, read with pgn-reader and written back; its tests in `src/pgn/tests.rs` |
 | `build.rs` | Reads shakmaty's version from `Cargo.lock` for `shakmatyVersion()` |
 | `src/bin/uniffi-bindgen.rs` | UniFFI's bindings generator, pinned to the crate's version |
 | `build-xcframework.sh` | Builds `build/ScacchiFFI.xcframework` and regenerates the Swift bindings |

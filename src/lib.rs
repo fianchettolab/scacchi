@@ -1,5 +1,6 @@
 //! Chess rules for Swift, built on shakmaty: a game from any FEN, its legal moves in UCI,
-//! SAN for every move, and every ending, exported through UniFFI.
+//! SAN for every move, and every ending, and Lichess study chapters in PGN, exported
+//! through UniFFI.
 
 use std::sync::Mutex;
 
@@ -10,6 +11,10 @@ use shakmaty::{
     uci::UciMove,
     zobrist::Zobrist64,
 };
+
+mod pgn;
+
+pub use pgn::*;
 
 uniffi::setup_scaffolding!();
 
@@ -110,6 +115,13 @@ pub enum ScacchiError {
     InvalidFen { fen: String, reason: String },
     #[error("illegal move {uci}")]
     IllegalMove { uci: String },
+    /// `chapter` counts from 1; `at` is the move ("12... Nf3"), empty for the tags.
+    #[error("invalid PGN in chapter {chapter} at {at:?}: {reason}")]
+    InvalidPgn { chapter: u32, at: String, reason: String },
+    #[error("no node {id}")]
+    UnknownNode { id: u32 },
+    #[error("{reason}")]
+    InvalidEdit { reason: String },
 }
 
 struct State {

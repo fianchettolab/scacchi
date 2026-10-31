@@ -4,7 +4,7 @@ version = "0.2.1"
 edition = "2024"
 rust-version = "1.97"
 license = "GPL-3.0-or-later"
-description = "Chess rules for Swift: legal moves, SAN, FEN and every ending, built on shakmaty"
+description = "Chess rules for Swift: legal moves, SAN, FEN, every ending and study chapters in PGN, built on shakmaty"
 publish = false
 
 [lib]
@@ -16,6 +16,7 @@ path = "src/bin/uniffi-bindgen.rs"
 required-features = ["cli"]
 
 [dependencies]
+pgn-reader = "=0.29.1"
 shakmaty = "=0.30.2"
 thiserror = "2"
 uniffi = "=0.32.2"

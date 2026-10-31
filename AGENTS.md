@@ -43,10 +43,41 @@ doesn't repeat them.
   material (shakmaty's rule), threefold repetition, the fifty-move rule. Repetition counts
   the zobrist hashes of the positions since the last irreversible move; the third
   occurrence is a draw. Draws are reported, not claimed: the caller decides.
+- **Study chapters are PGN, as Lichess exports them** (`src/pgn.rs`): pgn-reader streams
+  the events and Scacchi builds the tree and writes it back; read → write → read gives the
+  same tree, not the same bytes.
+  - **A `Chapter` object with node ids**, locked inside like `Game`; the root (id 0) is the
+    start position. `node(id:)` returns a record; edits (`addMove`, `setComments`,
+    `setAnnotations`, `setShapes`, `setTag`) go through the object, so legality and SAN
+    stay in Rust. `addMove` returns the existing child for a move already there. Ids are
+    never reused. Deleting and promoting variations aren't there yet.
+  - **Comments are lists, as in chessops:** after the move, one per `{…}`; before it only
+    at a variation's first move (`startingComments`, kept from imports); the root's are
+    the chapter's opening comment; a comment after `)` belongs to the replaced move.
+  - **Annotations:** `moveMark` ($1–$6, written as symbols on the move, `Nf6!?`),
+    `positionSign` (Lichess's eight: $10, $13–$19) and `others` in order; a second mark or
+    sign goes to the others. `others` are `UInt32`s, as `[UInt8]` would be `Data`.
+  - **Shapes belong to the node**, read from any comment with chessops' syntax and written
+    in order (a new `%csl`/`%cal` each time the kind changes). Other `[%…]` commands are
+    kept raw in `commands` and written back after the shapes, in the last comment.
+  - **Tags** are kept in order, except FEN and SetUp, which come from the root position
+    and are written when it isn't the standard start. A Variant other than standard is an
+    error. A movetext result with no Result tag becomes one.
+  - **Strict:** an illegal move, an unmatched bracket, a variation with nothing to replace
+    or a bad FEN fails the whole read, naming the chapter (from 1) and the move. So does
+    syntax pgn-reader can't get past (it reports an I/O error, such as an unterminated
+    tag). Tokens pgn-reader doesn't recognise are skipped by it, not reported: `O—O` with
+    an em dash just ends the line.
+  - **Tag values are unescaped by Scacchi,** not pgn-reader's `RawTag::decode`: in 0.29.1
+    it turns `\\\\` into one backslash instead of two.
+  - **Tests** port chessops' PGN cases and its `data/` files (`src/pgn/tests/chessops/`,
+    GPL-3.0-or-later, origin in its README), noting where Scacchi differs.
+  - Swift names avoid clashes with SwiftUI and Swift Testing: `DrawShape`, `PgnTag`.
 - **No byte vectors in the API.** UniFFI turns a Rust `Vec<u8>` into Swift `Data`, so
   return records (`Piece`) or lists of them.
-- **Pinned exactly:** shakmaty and UniFFI (`=` versions in `Cargo.toml`). Upgrading
-  either is a deliberate change, tested on both sides.
+- **Pinned exactly:** shakmaty, pgn-reader and UniFFI (`=` versions in `Cargo.toml`).
+  Upgrading any is a deliberate change, tested on both sides; pgn-reader follows
+  shakmaty's minor version.
 - **`shakmatyVersion()` reports the upstream** (apps show it next to Scacchi's own
   version). `build.rs` reads it from `Cargo.lock`, so it's what was linked. The Rust test
   checks it against the `=` pin; the Swift test spells the version out, so a shakmaty

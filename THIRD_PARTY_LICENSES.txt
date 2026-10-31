@@ -1318,6 +1318,12 @@ https://github.com/matklad/once_cell
 --- LICENSE-MIT: same text as in anyhow 1.0.104
 
 ==============================================================================
+pgn-reader 0.29.1: GPL-3.0-or-later
+https://github.com/niklasf/shakmaty
+
+Licensed under GPL-3.0-or-later; its text is at the end of this file.
+
+==============================================================================
 rustix 1.1.5: Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT
 https://github.com/bytecodealliance/rustix
 

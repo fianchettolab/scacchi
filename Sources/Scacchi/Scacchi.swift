@@ -568,6 +568,381 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 
 /**
+ * A study chapter: tags and a tree of moves from a start position, with variations,
+ * comments, annotations and shapes. Thread-safe: every method takes the lock.
+ */
+public protocol ChapterProtocol: AnyObject, Sendable {
+    
+    /**
+     * Plays a UCI move after node `after`: the existing child when that move is already
+     * there, otherwise a new one as its last variation (or its main line, when it has no
+     * children). Returns the child's id.
+     */
+    func addMove(after: UInt32, uci: String) throws  -> UInt32
+    
+    /**
+     * The moves from the start to `to`, `to` included (empty for the root).
+     */
+    func line(to: UInt32) throws  -> [UInt32]
+    
+    /**
+     * The main line on from `from`: its first child, that one's first child, and so on
+     * (`from` itself not included).
+     */
+    func mainline(from: UInt32) throws  -> [UInt32]
+    
+    /**
+     * The chapter's name: its ChapterName tag, otherwise its Event.
+     */
+    func name()  -> String?
+    
+    func node(id: UInt32) throws  -> Node
+    
+    /**
+     * Which side the board shows at the bottom: the Orientation tag, White by default.
+     */
+    func orientation()  -> Side
+    
+    /**
+     * The chapter in PGN.
+     */
+    func pgn()  -> String
+    
+    /**
+     * The root's id: the start position.
+     */
+    func root()  -> UInt32
+    
+    /**
+     * Filed the way the reader files them: a mark or sign among the others moves to its
+     * field when that's empty. Only moves have annotations, so not the root.
+     */
+    func setAnnotations(id: UInt32, annotations: Annotations) throws 
+    
+    /**
+     * The comments after the move (for the root, the chapter's opening comment). Each is
+     * trimmed, `}` is dropped (PGN can't hold it) and empty ones go.
+     */
+    func setComments(id: UInt32, comments: [String]) throws 
+    
+    /**
+     * The arrows and highlighted squares on the position after the move (for the root, on
+     * the start position). An arrow to its own square is a highlighted square.
+     */
+    func setShapes(id: UInt32, shapes: [DrawShape]) throws 
+    
+    /**
+     * Sets a tag, replacing one of the same name in place or adding it at the end; None
+     * removes it. FEN and SetUp can't be set: they come from the start position.
+     */
+    func setTag(name: String, value: String?) throws 
+    
+    /**
+     * Every tag in order, FEN and SetUp aside (they come from the start position).
+     */
+    func tags()  -> [PgnTag]
+    
+}
+/**
+ * A study chapter: tags and a tree of moves from a start position, with variations,
+ * comments, annotations and shapes. Thread-safe: every method takes the lock.
+ */
+open class Chapter: ChapterProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_scacchi_fn_clone_chapter(self.handle, $0) }
+    }
+    /**
+     * An empty chapter from the standard start position.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_constructor_chapter_new(uniffiCallStatus
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_scacchi_fn_free_chapter(handle, $0) }
+    }
+
+    
+    /**
+     * An empty chapter from a FEN.
+     */
+public static func fromFen(fen: String)throws  -> Chapter  {
+    return try  FfiConverterTypeChapter_lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_constructor_chapter_from_fen(
+        FfiConverterString.lower(fen),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+    /**
+     * Plays a UCI move after node `after`: the existing child when that move is already
+     * there, otherwise a new one as its last variation (or its main line, when it has no
+     * children). Returns the child's id.
+     */
+open func addMove(after: UInt32, uci: String)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_add_move(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(after),
+        FfiConverterString.lower(uci),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The moves from the start to `to`, `to` included (empty for the root).
+     */
+open func line(to: UInt32)throws  -> [UInt32]  {
+    return try  FfiConverterSequenceUInt32.lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_line(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(to),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The main line on from `from`: its first child, that one's first child, and so on
+     * (`from` itself not included).
+     */
+open func mainline(from: UInt32)throws  -> [UInt32]  {
+    return try  FfiConverterSequenceUInt32.lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_mainline(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(from),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The chapter's name: its ChapterName tag, otherwise its Event.
+     */
+open func name() -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_name(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+open func node(id: UInt32)throws  -> Node  {
+    return try  FfiConverterTypeNode_lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_node(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(id),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Which side the board shows at the bottom: the Orientation tag, White by default.
+     */
+open func orientation() -> Side  {
+    return try!  FfiConverterTypeSide_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_orientation(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The chapter in PGN.
+     */
+open func pgn() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_pgn(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The root's id: the start position.
+     */
+open func root() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_root(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Filed the way the reader files them: a mark or sign among the others moves to its
+     * field when that's empty. Only moves have annotations, so not the root.
+     */
+open func setAnnotations(id: UInt32, annotations: Annotations)throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_set_annotations(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(id),
+        FfiConverterTypeAnnotations_lower(annotations),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The comments after the move (for the root, the chapter's opening comment). Each is
+     * trimmed, `}` is dropped (PGN can't hold it) and empty ones go.
+     */
+open func setComments(id: UInt32, comments: [String])throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_set_comments(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(id),
+        FfiConverterSequenceString.lower(comments),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The arrows and highlighted squares on the position after the move (for the root, on
+     * the start position). An arrow to its own square is a highlighted square.
+     */
+open func setShapes(id: UInt32, shapes: [DrawShape])throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_set_shapes(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(id),
+        FfiConverterSequenceTypeDrawShape.lower(shapes),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Sets a tag, replacing one of the same name in place or adding it at the end; None
+     * removes it. FEN and SetUp can't be set: they come from the start position.
+     */
+open func setTag(name: String, value: String?)throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_set_tag(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterOptionString.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Every tag in order, FEN and SetUp aside (they come from the start position).
+     */
+open func tags() -> [PgnTag]  {
+    return try!  FfiConverterSequenceTypePgnTag.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_tags(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChapter: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = Chapter
+
+    public static func lift(_ handle: UInt64) throws -> Chapter {
+        return Chapter(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: Chapter) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Chapter {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: Chapter, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChapter_lift(_ handle: UInt64) throws -> Chapter {
+    return try FfiConverterTypeChapter.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChapter_lower(_ value: Chapter) -> UInt64 {
+    return FfiConverterTypeChapter.lower(value)
+}
+
+
+
+
+
+
+/**
  * A game from a start position. Thread-safe: every method takes the lock.
  */
 public protocol GameProtocol: AnyObject, Sendable {
@@ -862,6 +1237,75 @@ public func FfiConverterTypeGame_lower(_ value: Game) -> UInt64 {
 
 
 /**
+ * A move's annotations (NAGs).
+ */
+public struct Annotations: Equatable, Hashable {
+    public var moveMark: MoveMark?
+    public var positionSign: PositionSign?
+    /**
+     * Every other NAG (0–255), in order: `$7` □, `$146` N, `$11`, … and a second mark or
+     * sign on the same move.
+     */
+    public var others: [UInt32]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(moveMark: MoveMark?, positionSign: PositionSign?, 
+        /**
+         * Every other NAG (0–255), in order: `$7` □, `$146` N, `$11`, … and a second mark or
+         * sign on the same move.
+         */others: [UInt32]) {
+        self.moveMark = moveMark
+        self.positionSign = positionSign
+        self.others = others
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Annotations: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAnnotations: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Annotations {
+        return
+            try Annotations(
+                moveMark: FfiConverterOptionTypeMoveMark.read(from: &buf), 
+                positionSign: FfiConverterOptionTypePositionSign.read(from: &buf), 
+                others: FfiConverterSequenceUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Annotations, into buf: inout [UInt8]) {
+        FfiConverterOptionTypeMoveMark.write(value.moveMark, into: &buf)
+        FfiConverterOptionTypePositionSign.write(value.positionSign, into: &buf)
+        FfiConverterSequenceUInt32.write(value.others, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnnotations_lift(_ buf: RustBuffer) throws -> Annotations {
+    return try FfiConverterTypeAnnotations.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnnotations_lower(_ value: Annotations) -> RustBuffer {
+    return FfiConverterTypeAnnotations.lower(value)
+}
+
+
+/**
  * What's on the board and who moves.
  */
 public struct BoardState: Equatable, Hashable {
@@ -921,6 +1365,273 @@ public func FfiConverterTypeBoardState_lift(_ buf: RustBuffer) throws -> BoardSt
 #endif
 public func FfiConverterTypeBoardState_lower(_ value: BoardState) -> RustBuffer {
     return FfiConverterTypeBoardState.lower(value)
+}
+
+
+/**
+ * An arrow, or a highlighted square when there's no `to`. Squares a1 = 0 … h8 = 63.
+ */
+public struct DrawShape: Equatable, Hashable {
+    public var brush: Brush
+    public var from: UInt8
+    public var to: UInt8?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(brush: Brush, from: UInt8, to: UInt8?) {
+        self.brush = brush
+        self.from = from
+        self.to = to
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DrawShape: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDrawShape: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DrawShape {
+        return
+            try DrawShape(
+                brush: FfiConverterTypeBrush.read(from: &buf), 
+                from: FfiConverterUInt8.read(from: &buf), 
+                to: FfiConverterOptionUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DrawShape, into buf: inout [UInt8]) {
+        FfiConverterTypeBrush.write(value.brush, into: &buf)
+        FfiConverterUInt8.write(value.from, into: &buf)
+        FfiConverterOptionUInt8.write(value.to, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDrawShape_lift(_ buf: RustBuffer) throws -> DrawShape {
+    return try FfiConverterTypeDrawShape.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDrawShape_lower(_ value: DrawShape) -> RustBuffer {
+    return FfiConverterTypeDrawShape.lower(value)
+}
+
+
+/**
+ * A node of a chapter's tree: the start position (the root) or a move.
+ */
+public struct Node: Equatable, Hashable {
+    public var id: UInt32
+    /**
+     * None for the root.
+     */
+    public var parent: UInt32?
+    /**
+     * The main line first, then the variations, in order.
+     */
+    public var children: [UInt32]
+    /**
+     * The move into this node; None for the root.
+     */
+    public var played: PlayedMove?
+    /**
+     * The move's number and who played it, as written before it ("3." or "3..."). For the
+     * root, those of the first move from the start position.
+     */
+    public var moveNumber: UInt32
+    public var side: Side
+    /**
+     * The position after the move (for the root, the start position).
+     */
+    public var fen: String
+    /**
+     * Comments after the move, one for each `{…}`. The root's are the chapter's opening
+     * comment.
+     */
+    public var comments: [String]
+    /**
+     * Comments before the move, only at the first move of a variation.
+     */
+    public var startingComments: [String]
+    public var annotations: Annotations
+    public var shapes: [DrawShape]
+    /**
+     * Other `[%…]` commands (`[%eval 0.17]`, `[%clk 0:03:00]`), raw, written back as read.
+     */
+    public var commands: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: UInt32, 
+        /**
+         * None for the root.
+         */parent: UInt32?, 
+        /**
+         * The main line first, then the variations, in order.
+         */children: [UInt32], 
+        /**
+         * The move into this node; None for the root.
+         */played: PlayedMove?, 
+        /**
+         * The move's number and who played it, as written before it ("3." or "3..."). For the
+         * root, those of the first move from the start position.
+         */moveNumber: UInt32, side: Side, 
+        /**
+         * The position after the move (for the root, the start position).
+         */fen: String, 
+        /**
+         * Comments after the move, one for each `{…}`. The root's are the chapter's opening
+         * comment.
+         */comments: [String], 
+        /**
+         * Comments before the move, only at the first move of a variation.
+         */startingComments: [String], annotations: Annotations, shapes: [DrawShape], 
+        /**
+         * Other `[%…]` commands (`[%eval 0.17]`, `[%clk 0:03:00]`), raw, written back as read.
+         */commands: [String]) {
+        self.id = id
+        self.parent = parent
+        self.children = children
+        self.played = played
+        self.moveNumber = moveNumber
+        self.side = side
+        self.fen = fen
+        self.comments = comments
+        self.startingComments = startingComments
+        self.annotations = annotations
+        self.shapes = shapes
+        self.commands = commands
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Node: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNode: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Node {
+        return
+            try Node(
+                id: FfiConverterUInt32.read(from: &buf), 
+                parent: FfiConverterOptionUInt32.read(from: &buf), 
+                children: FfiConverterSequenceUInt32.read(from: &buf), 
+                played: FfiConverterOptionTypePlayedMove.read(from: &buf), 
+                moveNumber: FfiConverterUInt32.read(from: &buf), 
+                side: FfiConverterTypeSide.read(from: &buf), 
+                fen: FfiConverterString.read(from: &buf), 
+                comments: FfiConverterSequenceString.read(from: &buf), 
+                startingComments: FfiConverterSequenceString.read(from: &buf), 
+                annotations: FfiConverterTypeAnnotations.read(from: &buf), 
+                shapes: FfiConverterSequenceTypeDrawShape.read(from: &buf), 
+                commands: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Node, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.id, into: &buf)
+        FfiConverterOptionUInt32.write(value.parent, into: &buf)
+        FfiConverterSequenceUInt32.write(value.children, into: &buf)
+        FfiConverterOptionTypePlayedMove.write(value.played, into: &buf)
+        FfiConverterUInt32.write(value.moveNumber, into: &buf)
+        FfiConverterTypeSide.write(value.side, into: &buf)
+        FfiConverterString.write(value.fen, into: &buf)
+        FfiConverterSequenceString.write(value.comments, into: &buf)
+        FfiConverterSequenceString.write(value.startingComments, into: &buf)
+        FfiConverterTypeAnnotations.write(value.annotations, into: &buf)
+        FfiConverterSequenceTypeDrawShape.write(value.shapes, into: &buf)
+        FfiConverterSequenceString.write(value.commands, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNode_lift(_ buf: RustBuffer) throws -> Node {
+    return try FfiConverterTypeNode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNode_lower(_ value: Node) -> RustBuffer {
+    return FfiConverterTypeNode.lower(value)
+}
+
+
+/**
+ * A PGN tag pair, like `[White "Deep Blue"]`.
+ */
+public struct PgnTag: Equatable, Hashable {
+    public var name: String
+    public var value: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PgnTag: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePgnTag: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PgnTag {
+        return
+            try PgnTag(
+                name: FfiConverterString.read(from: &buf), 
+                value: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PgnTag, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePgnTag_lift(_ buf: RustBuffer) throws -> PgnTag {
+    return try FfiConverterTypePgnTag.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePgnTag_lower(_ value: PgnTag) -> RustBuffer {
+    return FfiConverterTypePgnTag.lower(value)
 }
 
 
@@ -1062,6 +1773,89 @@ public func FfiConverterTypePlayedMove_lift(_ buf: RustBuffer) throws -> PlayedM
 public func FfiConverterTypePlayedMove_lower(_ value: PlayedMove) -> RustBuffer {
     return FfiConverterTypePlayedMove.lower(value)
 }
+
+
+/**
+ * Lichess's four brushes, written G, R, Y, B.
+ */
+
+public enum Brush: Equatable, Hashable {
+    
+    case green
+    case red
+    case yellow
+    case blue
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension Brush: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBrush: FfiConverterRustBuffer {
+    typealias SwiftType = Brush
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Brush {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .green
+        
+        case 2: return .red
+        
+        case 3: return .yellow
+        
+        case 4: return .blue
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: Brush, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .green:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .red:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .yellow:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .blue:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBrush_lift(_ buf: RustBuffer) throws -> Brush {
+    return try FfiConverterTypeBrush.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBrush_lower(_ value: Brush) -> RustBuffer {
+    return FfiConverterTypeBrush.lower(value)
+}
+
 
 
 
@@ -1229,6 +2023,256 @@ public func FfiConverterTypeGameStatus_lower(_ value: GameStatus) -> RustBuffer 
 
 
 
+/**
+ * A move's mark: `$1`–`$6`, written `!` `?` `!!` `??` `!?` `?!`.
+ */
+
+public enum MoveMark: Equatable, Hashable {
+    
+    /**
+     * `!`, `$1`
+     */
+    case good
+    /**
+     * `?`, `$2`
+     */
+    case mistake
+    /**
+     * `!!`, `$3`
+     */
+    case brilliant
+    /**
+     * `??`, `$4`
+     */
+    case blunder
+    /**
+     * `!?`, `$5`
+     */
+    case interesting
+    /**
+     * `?!`, `$6`
+     */
+    case dubious
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MoveMark: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMoveMark: FfiConverterRustBuffer {
+    typealias SwiftType = MoveMark
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MoveMark {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .good
+        
+        case 2: return .mistake
+        
+        case 3: return .brilliant
+        
+        case 4: return .blunder
+        
+        case 5: return .interesting
+        
+        case 6: return .dubious
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MoveMark, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .good:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .mistake:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .brilliant:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .blunder:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .interesting:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .dubious:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMoveMark_lift(_ buf: RustBuffer) throws -> MoveMark {
+    return try FfiConverterTypeMoveMark.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMoveMark_lower(_ value: MoveMark) -> RustBuffer {
+    return FfiConverterTypeMoveMark.lower(value)
+}
+
+
+
+/**
+ * The position's assessment after a move, Lichess's eight signs.
+ */
+
+public enum PositionSign: Equatable, Hashable {
+    
+    /**
+     * `=`, `$10`
+     */
+    case equal
+    /**
+     * `∞`, `$13`
+     */
+    case unclear
+    /**
+     * `⩲`, `$14`
+     */
+    case whiteSlightlyBetter
+    /**
+     * `⩱`, `$15`
+     */
+    case blackSlightlyBetter
+    /**
+     * `±`, `$16`
+     */
+    case whiteBetter
+    /**
+     * `∓`, `$17`
+     */
+    case blackBetter
+    /**
+     * `+−`, `$18`
+     */
+    case whiteWinning
+    /**
+     * `−+`, `$19`
+     */
+    case blackWinning
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension PositionSign: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePositionSign: FfiConverterRustBuffer {
+    typealias SwiftType = PositionSign
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PositionSign {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .equal
+        
+        case 2: return .unclear
+        
+        case 3: return .whiteSlightlyBetter
+        
+        case 4: return .blackSlightlyBetter
+        
+        case 5: return .whiteBetter
+        
+        case 6: return .blackBetter
+        
+        case 7: return .whiteWinning
+        
+        case 8: return .blackWinning
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PositionSign, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .equal:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .unclear:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .whiteSlightlyBetter:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .blackSlightlyBetter:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .whiteBetter:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .blackBetter:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .whiteWinning:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .blackWinning:
+            writeInt(&buf, Int32(8))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePositionSign_lift(_ buf: RustBuffer) throws -> PositionSign {
+    return try FfiConverterTypePositionSign.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePositionSign_lower(_ value: PositionSign) -> RustBuffer {
+    return FfiConverterTypePositionSign.lower(value)
+}
+
+
+
 
 public enum Role: Equatable, Hashable {
     
@@ -1332,6 +2376,15 @@ enum ScacchiError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
     )
     case IllegalMove(uci: String
     )
+    /**
+     * `chapter` counts from 1; `at` is the move ("12... Nf3"), empty for the tags.
+     */
+    case InvalidPgn(chapter: UInt32, at: String, reason: String
+    )
+    case UnknownNode(id: UInt32
+    )
+    case InvalidEdit(reason: String
+    )
 
     
 
@@ -1368,6 +2421,17 @@ public struct FfiConverterTypeScacchiError: FfiConverterRustBuffer {
         case 2: return .IllegalMove(
             uci: try FfiConverterString.read(from: &buf)
             )
+        case 3: return .InvalidPgn(
+            chapter: try FfiConverterUInt32.read(from: &buf), 
+            at: try FfiConverterString.read(from: &buf), 
+            reason: try FfiConverterString.read(from: &buf)
+            )
+        case 4: return .UnknownNode(
+            id: try FfiConverterUInt32.read(from: &buf)
+            )
+        case 5: return .InvalidEdit(
+            reason: try FfiConverterString.read(from: &buf)
+            )
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1389,6 +2453,23 @@ public struct FfiConverterTypeScacchiError: FfiConverterRustBuffer {
         case let .IllegalMove(uci):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(uci, into: &buf)
+            
+        
+        case let .InvalidPgn(chapter,at,reason):
+            writeInt(&buf, Int32(3))
+            FfiConverterUInt32.write(chapter, into: &buf)
+            FfiConverterString.write(at, into: &buf)
+            FfiConverterString.write(reason, into: &buf)
+            
+        
+        case let .UnknownNode(id):
+            writeInt(&buf, Int32(4))
+            FfiConverterUInt32.write(id, into: &buf)
+            
+        
+        case let .InvalidEdit(reason):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(reason, into: &buf)
             
         }
     }
@@ -1478,6 +2559,175 @@ public func FfiConverterTypeSide_lower(_ value: Side) -> RustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = UInt8?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt8.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypePlayedMove: FfiConverterRustBuffer {
+    typealias SwiftType = PlayedMove?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePlayedMove.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePlayedMove.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeMoveMark: FfiConverterRustBuffer {
+    typealias SwiftType = MoveMark?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeMoveMark.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeMoveMark.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypePositionSign: FfiConverterRustBuffer {
+    typealias SwiftType = PositionSign?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePositionSign.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePositionSign.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt32]
+
+    public static func write(_ value: [UInt32], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt32.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt32] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt32]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt32.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -1495,6 +2745,81 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeChapter: FfiConverterRustBuffer {
+    typealias SwiftType = [Chapter]
+
+    public static func write(_ value: [Chapter], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeChapter.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Chapter] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Chapter]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeChapter.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeDrawShape: FfiConverterRustBuffer {
+    typealias SwiftType = [DrawShape]
+
+    public static func write(_ value: [DrawShape], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeDrawShape.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [DrawShape] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [DrawShape]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeDrawShape.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePgnTag: FfiConverterRustBuffer {
+    typealias SwiftType = [PgnTag]
+
+    public static func write(_ value: [PgnTag], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePgnTag.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PgnTag] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PgnTag]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePgnTag.read(from: &buf))
         }
         return seq
     }
@@ -1535,6 +2860,30 @@ public func shakmatyVersion() -> String  {
     )
 })
 }
+/**
+ * Every chapter in a PGN (a study's export: one game per chapter), in order. Fails on the
+ * first chapter with an illegal move, an unmatched bracket, an invalid FEN or a variant
+ * other than standard chess.
+ */
+public func readStudy(pgn: String)throws  -> [Chapter]  {
+    return try  FfiConverterSequenceTypeChapter.lift(try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_func_read_study(
+        FfiConverterString.lower(pgn),uniffiCallStatus
+    )
+})
+}
+/**
+ * The chapters' PGNs, one after the other.
+ */
+public func writeStudy(chapters: [Chapter]) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_func_write_study(
+        FfiConverterSequenceTypeChapter.lower(chapters),uniffiCallStatus
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -1552,6 +2901,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_scacchi_checksum_func_shakmaty_version() != 56209) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_func_read_study() != 4179) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_func_write_study() != 58569) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_board() != 19751) {
@@ -1587,10 +2942,55 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scacchi_checksum_method_game_turn() != 27435) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_scacchi_checksum_method_chapter_add_move() != 24550) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_line() != 47221) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_mainline() != 48298) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_name() != 40019) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_node() != 53427) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_orientation() != 7611) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_pgn() != 23675) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_root() != 40770) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_set_annotations() != 8769) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_set_comments() != 14113) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_set_shapes() != 13039) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_set_tag() != 1810) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_tags() != 35836) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_scacchi_checksum_constructor_game_from_fen() != 12951) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_constructor_game_new() != 44672) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_constructor_chapter_from_fen() != 13605) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_constructor_chapter_new() != 56537) {
         return InitializationResult.apiChecksumMismatch
     }
 

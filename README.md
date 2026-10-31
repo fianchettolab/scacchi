@@ -18,6 +18,7 @@ let game = try Game.fromFen(fen: "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1")
 game.legalMoves()            // ["a1a2", …, "e1g1", "e1c1"], in UCI
 try game.play(uci: "e1g1")   // PlayedMove(uci: "e1g1", san: "O-O", isCapture: false)
 game.status()                // .ongoing, .checkmate(winner:), .draw(reason:)
+game.hasInsufficientMaterial(side: .white)  // whether White can no longer mate, e.g. on a flag fall
 game.board()                 // the pieces, squares a1 = 0 … h8 = 63, and the side to move
 game.checkers()              // the pieces giving check
 game.fen()

@@ -53,6 +53,17 @@ struct GameTests {
         #expect(stalemate.status() == .draw(reason: .stalemate))
     }
 
+    @Test func insufficientMaterialPerSide() throws {
+        let rook = try Game.fromFen(fen: "8/8/4k3/8/8/3K4/8/R7 w - - 0 1")
+        #expect(!rook.hasInsufficientMaterial(side: .white))
+        #expect(rook.hasInsufficientMaterial(side: .black))
+
+        let knight = try Game.fromFen(fen: "8/8/4k3/8/8/3K4/8/N7 w - - 0 1")
+        #expect(knight.hasInsufficientMaterial(side: .white))
+        let helped = try Game.fromFen(fen: "8/4p3/4k3/8/8/3K4/8/N7 w - - 0 1")
+        #expect(!helped.hasInsufficientMaterial(side: .white))
+    }
+
     @Test func errors() throws {
         #expect(throws: ScacchiError.self) { try Game.fromFen(fen: "not a fen") }
         #expect(throws: ScacchiError.IllegalMove(uci: "e2e5")) { try Game().play(uci: "e2e5") }

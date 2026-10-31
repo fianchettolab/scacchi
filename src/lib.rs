@@ -28,6 +28,15 @@ impl From<Color> for Side {
     }
 }
 
+impl From<Side> for Color {
+    fn from(side: Side) -> Self {
+        match side {
+            Side::White => Color::White,
+            Side::Black => Color::Black,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum Role {
     Pawn,
@@ -258,6 +267,13 @@ impl Game {
         };
         reason.map_or(GameStatus::Ongoing, |reason| GameStatus::Draw { reason })
     }
+
+    /// Whether `side` can no longer checkmate by any series of legal moves (shakmaty's
+    /// rule): a bare king, or a lone minor piece the opponent can't help it mate with.
+    /// For a flag fall, where the side still on time wins only if it could mate.
+    pub fn has_insufficient_material(&self, side: Side) -> bool {
+        self.state.lock().unwrap().position.has_insufficient_material(side.into())
+    }
 }
 
 impl Default for Game {
@@ -340,6 +356,22 @@ mod tests {
         assert_eq!(game.status(), GameStatus::Ongoing);
         game.play("f6g8".into()).unwrap();
         assert_eq!(game.status(), GameStatus::Draw { reason: DrawReason::ThreefoldRepetition });
+    }
+
+    #[test]
+    fn insufficient_material_per_side() {
+        // A lone king can't mate; a rook can.
+        let rook = Game::from_fen("8/8/4k3/8/8/3K4/8/R7 w - - 0 1".into()).unwrap();
+        assert!(!rook.has_insufficient_material(Side::White));
+        assert!(rook.has_insufficient_material(Side::Black));
+
+        // A lone knight can't mate a bare king, but can when the other side has a pawn
+        // to block its own king in.
+        let knight = Game::from_fen("8/8/4k3/8/8/3K4/8/N7 w - - 0 1".into()).unwrap();
+        assert!(knight.has_insufficient_material(Side::White));
+        let helped = Game::from_fen("8/4p3/4k3/8/8/3K4/8/N7 w - - 0 1".into()).unwrap();
+        assert!(!helped.has_insufficient_material(Side::White));
+        assert!(!helped.has_insufficient_material(Side::Black));
     }
 
     #[test]

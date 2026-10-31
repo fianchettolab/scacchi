@@ -586,6 +586,13 @@ public protocol GameProtocol: AnyObject, Sendable {
      */
     func fullmoves()  -> UInt32
     
+    /**
+     * Whether `side` can no longer checkmate by any series of legal moves (shakmaty's
+     * rule): a bare king, or a lone minor piece the opponent can't help it mate with.
+     * For a flag fall, where the side still on time wins only if it could mate.
+     */
+    func hasInsufficientMaterial(side: Side)  -> Bool
+    
     func isCheck()  -> Bool
     
     /**
@@ -722,6 +729,21 @@ open func fullmoves() -> UInt32  {
         uniffiCallStatus in
     uniffi_scacchi_fn_method_game_fullmoves(
             self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Whether `side` can no longer checkmate by any series of legal moves (shakmaty's
+     * rule): a bare king, or a lone minor piece the opponent can't help it mate with.
+     * For a flag fall, where the side still on time wins only if it could mate.
+     */
+open func hasInsufficientMaterial(side: Side) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_game_has_insufficient_material(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeSide_lower(side),uniffiCallStatus
     )
 })
 }
@@ -1542,6 +1564,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_fullmoves() != 39408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_game_has_insufficient_material() != 38947) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_game_is_check() != 25763) {

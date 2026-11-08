@@ -204,6 +204,15 @@ fn clocks() {
         ("0:03:00:00", None),
         ("-0:03:00", None),
         ("0:03:00 later", None),
+        // chessops' limits, so a clock always reads back as it was written.
+        ("0:00:09.4567", None),
+        ("0:00:00.0005", None),
+        ("99999:59:59.999", Some(MAX_CLOCK)),
+        ("100000:00:00", None),
+        ("99999:99:99", None),
+        ("0:000:00", None),
+        ("0:00:9", Some(9.0)),
+        ("99999999999999999999:00:00", None),
     ] {
         assert_eq!(parse_clock(args), seconds, "{args}");
     }
@@ -239,7 +248,16 @@ fn clocks() {
     chapter.set_clock(e5, None).unwrap();
     assert_eq!(chapter.node(e5).unwrap().clock, None);
     assert_eq!(chapter.pgn(), "\n1. e4 { [%clk 0:03:02] } 1... e5 *\n");
-    for bad in [-1.0, f64::NAN, f64::INFINITY] {
+    // Kept to the millisecond, as it's written.
+    chapter.set_clock(e5, Some(0.00049)).unwrap();
+    assert_eq!(chapter.node(e5).unwrap().clock, Some(0.0));
+    chapter.set_clock(e5, Some(MAX_CLOCK)).unwrap();
+    assert!(assert_round_trip(&chapter).contains("[%clk 99999:59:59.999]"));
+    // A clock out of range stays raw, and round-trips that way.
+    let raw = one("1. e4 { [%clk 0:00:09.4567] } *");
+    assert_eq!((raw.node(1).unwrap().clock, raw.node(1).unwrap().commands), (None, vec!["[%clk 0:00:09.4567]".to_owned()]));
+    assert_round_trip(&raw);
+    for bad in [-1.0, f64::NAN, f64::INFINITY, MAX_CLOCK + 0.001, 1e300] {
         assert!(matches!(chapter.set_clock(e4, Some(bad)), Err(ScacchiError::InvalidEdit { .. })));
     }
     assert!(matches!(chapter.set_clock(99, Some(1.0)), Err(ScacchiError::UnknownNode { id: 99 })));

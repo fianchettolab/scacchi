@@ -173,7 +173,8 @@ pub struct Node {
     pub starting_comments: Vec<String>,
     pub annotations: Annotations,
     pub shapes: Vec<DrawShape>,
-    /// The mover's time left after the move, in seconds, from `[%clk 0:03:00]`.
+    /// The mover's time left after the move, in seconds, from `[%clk 0:03:00]`. The root's
+    /// comes from the chapter's opening comment, as chessops reads it.
     pub clock: Option<f64>,
     /// Other `[%…]` commands (`[%eval 0.17]`), raw, written back as read.
     pub commands: Vec<String>,
@@ -319,20 +320,23 @@ struct ParsedComment {
     commands: Vec<String>,
 }
 
-/// `[%clk 1:02:03]` or `[%clk 0:00:09.4]`'s time, in seconds, as chessops reads it.
+/// The longest clock PGN can hold: chessops reads at most five digits of hours.
+const MAX_CLOCK: f64 = 99_999.0 * 3600.0 + 59.0 * 60.0 + 59.999;
+
+/// `[%clk 1:02:03]` or `[%clk 0:00:09.4]`'s time, in seconds, within chessops' limits: 1–5
+/// digits of hours, 1–2 of minutes and of seconds, up to three decimals, and no more than
+/// `MAX_CLOCK`, so whatever is read is written back the same.
 fn parse_clock(args: &str) -> Option<f64> {
+    let digits = |p: &str, max: usize| (1..=max).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit());
     let mut parts = args.trim().split(':');
     let (h, m, s) = (parts.next()?, parts.next()?, parts.next()?);
-    let digits = |p: &str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
     let (whole, fraction) = s.split_once('.').unwrap_or((s, ""));
-    if parts.next().is_some() || !digits(h) || !digits(m) || !digits(whole) {
+    let fraction_ok = fraction.len() <= 3 && fraction.bytes().all(|b| b.is_ascii_digit());
+    if parts.next().is_some() || !digits(h, 5) || !digits(m, 2) || !digits(whole, 2) || !fraction_ok {
         return None;
     }
-    if !fraction.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    let seconds: f64 = s.parse().ok()?;
-    Some(h.parse::<f64>().ok()? * 3600.0 + m.parse::<f64>().ok()? * 60.0 + seconds)
+    let seconds = h.parse::<f64>().ok()? * 3600.0 + m.parse::<f64>().ok()? * 60.0 + s.parse::<f64>().ok()?;
+    (seconds <= MAX_CLOCK).then_some(seconds)
 }
 
 /// The clock as chessops writes it: `H:MM:SS`, with up to three decimals when there are
@@ -860,12 +864,13 @@ impl Chapter {
     }
 
     /// The mover's time left after the move, in seconds, written as `[%clk]`; None removes
-    /// it. Written to the millisecond, so round it first for whole seconds.
+    /// it. Kept to the millisecond, as it's written, so round it first for whole seconds.
+    /// Up to 99999:59:59.999, the most PGN's clock holds.
     pub fn set_clock(&self, id: u32, seconds: Option<f64>) -> Result<(), ScacchiError> {
-        if let Some(bad) = seconds.filter(|s| !s.is_finite() || *s < 0.0) {
+        if let Some(bad) = seconds.filter(|s| !s.is_finite() || *s < 0.0 || *s > MAX_CLOCK) {
             return Err(ScacchiError::InvalidEdit { reason: format!("clock {bad} isn't a time left") });
         }
-        self.lock().get_mut(id)?.clock = seconds;
+        self.lock().get_mut(id)?.clock = seconds.map(|s| (s * 1000.0).round() / 1000.0);
         Ok(())
     }
 

@@ -637,7 +637,8 @@ public protocol ChapterProtocol: AnyObject, Sendable {
     
     /**
      * The mover's time left after the move, in seconds, written as `[%clk]`; None removes
-     * it. Written to the millisecond, so round it first for whole seconds.
+     * it. Kept to the millisecond, as it's written, so round it first for whole seconds.
+     * Up to 99999:59:59.999, the most PGN's clock holds.
      */
     func setClock(id: UInt32, seconds: Double?) throws 
     
@@ -862,7 +863,8 @@ open func setAnnotations(id: UInt32, annotations: Annotations)throws   {try rust
     
     /**
      * The mover's time left after the move, in seconds, written as `[%clk]`; None removes
-     * it. Written to the millisecond, so round it first for whole seconds.
+     * it. Kept to the millisecond, as it's written, so round it first for whole seconds.
+     * Up to 99999:59:59.999, the most PGN's clock holds.
      */
 open func setClock(id: UInt32, seconds: Double?)throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
         uniffiCallStatus in
@@ -1504,7 +1506,8 @@ public struct Node: Equatable, Hashable {
     public var annotations: Annotations
     public var shapes: [DrawShape]
     /**
-     * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`.
+     * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`. The root's
+     * comes from the chapter's opening comment, as chessops reads it.
      */
     public var clock: Double?
     /**
@@ -1539,7 +1542,8 @@ public struct Node: Equatable, Hashable {
          * Comments before the move, only at the first move of a variation.
          */startingComments: [String], annotations: Annotations, shapes: [DrawShape], 
         /**
-         * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`.
+         * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`. The root's
+         * comes from the chapter's opening comment, as chessops reads it.
          */clock: Double?, 
         /**
          * Other `[%…]` commands (`[%eval 0.17]`), raw, written back as read.
@@ -3039,7 +3043,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_scacchi_checksum_method_chapter_set_annotations() != 8769) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_scacchi_checksum_method_chapter_set_clock() != 13172) {
+    if (uniffi_scacchi_checksum_method_chapter_set_clock() != 25599) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_chapter_set_comments() != 14113) {

@@ -151,7 +151,7 @@ pub struct PgnTag {
 }
 
 /// A node of a chapter's tree: the start position (the root) or a move.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct Node {
     pub id: u32,
     /// None for the root.
@@ -173,7 +173,9 @@ pub struct Node {
     pub starting_comments: Vec<String>,
     pub annotations: Annotations,
     pub shapes: Vec<DrawShape>,
-    /// Other `[%…]` commands (`[%eval 0.17]`, `[%clk 0:03:00]`), raw, written back as read.
+    /// The mover's time left after the move, in seconds, from `[%clk 0:03:00]`.
+    pub clock: Option<f64>,
+    /// Other `[%…]` commands (`[%eval 0.17]`), raw, written back as read.
     pub commands: Vec<String>,
 }
 
@@ -187,6 +189,7 @@ struct NodeData {
     starting_comments: Vec<String>,
     annotations: Annotations,
     shapes: Vec<DrawShape>,
+    clock: Option<f64>,
     commands: Vec<String>,
 }
 
@@ -201,6 +204,7 @@ impl NodeData {
             starting_comments: Vec::new(),
             annotations: Annotations::default(),
             shapes: Vec::new(),
+            clock: None,
             commands: Vec::new(),
         }
     }
@@ -270,6 +274,7 @@ impl Tree {
             starting_comments: data.starting_comments.clone(),
             annotations: data.annotations.clone(),
             shapes: data.shapes.clone(),
+            clock: data.clock,
             commands: data.commands.clone(),
         })
     }
@@ -305,12 +310,38 @@ fn clean_comment(text: &str) -> Option<String> {
 
 // MARK: - Comments
 
-/// What a `{…}` holds: its text, its shapes and its other `[%…]` commands.
+/// What a `{…}` holds: its text, its shapes, its clock and its other `[%…]` commands.
 #[derive(Default)]
 struct ParsedComment {
     text: Option<String>,
     shapes: Vec<DrawShape>,
+    clock: Option<f64>,
     commands: Vec<String>,
+}
+
+/// `[%clk 1:02:03]` or `[%clk 0:00:09.4]`'s time, in seconds, as chessops reads it.
+fn parse_clock(args: &str) -> Option<f64> {
+    let mut parts = args.trim().split(':');
+    let (h, m, s) = (parts.next()?, parts.next()?, parts.next()?);
+    let digits = |p: &str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
+    let (whole, fraction) = s.split_once('.').unwrap_or((s, ""));
+    if parts.next().is_some() || !digits(h) || !digits(m) || !digits(whole) {
+        return None;
+    }
+    if !fraction.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let seconds: f64 = s.parse().ok()?;
+    Some(h.parse::<f64>().ok()? * 3600.0 + m.parse::<f64>().ok()? * 60.0 + seconds)
+}
+
+/// The clock as chessops writes it: `H:MM:SS`, with up to three decimals when there are
+/// any (`0:00:09.4`).
+fn write_clock(seconds: f64) -> String {
+    let millis = (seconds.max(0.0) * 1000.0).round() as u64;
+    let (h, m, s, ms) = (millis / 3_600_000, millis / 60_000 % 60, millis / 1000 % 60, millis % 1000);
+    let fraction = if ms == 0 { String::new() } else { format!(".{ms:03}").trim_end_matches('0').to_owned() };
+    format!("[%clk {h}:{m:02}:{s:02}{fraction}]")
 }
 
 fn parse_square(s: &str) -> Option<u8> {
@@ -348,9 +379,11 @@ fn parse_comment(comment: &str) -> ParsedComment {
         let shapes: Option<Vec<DrawShape>> = matches!(name, "csl" | "cal")
             .then(|| args.trim().split(',').map(|item| parse_shape(item.trim())).collect())
             .flatten();
-        match shapes {
-            Some(shapes) => parsed.shapes.extend(shapes),
-            None => parsed.commands.push(command.to_owned()),
+        let clock = (name == "clk").then(|| parse_clock(args)).flatten();
+        match (shapes, clock) {
+            (Some(shapes), _) => parsed.shapes.extend(shapes),
+            (_, Some(clock)) => parsed.clock = Some(clock),
+            _ => parsed.commands.push(command.to_owned()),
         }
     }
     text.push(rest);
@@ -470,6 +503,7 @@ impl Visitor for ChapterReader {
         node.starting_comments.append(&mut line.pending_texts);
         let pending = std::mem::take(&mut line.pending);
         node.shapes.extend(pending.shapes);
+        node.clock = pending.clock.or(node.clock);
         node.commands.extend(pending.commands);
         line.node = id;
         line.started = true;
@@ -498,10 +532,12 @@ impl Visitor for ChapterReader {
             let node = &mut movetext.tree.nodes[line.node as usize];
             node.comments.extend(parsed.text);
             node.shapes.extend(parsed.shapes);
+            node.clock = parsed.clock.or(node.clock);
             node.commands.extend(parsed.commands);
         } else {
             line.pending_texts.extend(parsed.text);
             line.pending.shapes.extend(parsed.shapes);
+            line.pending.clock = parsed.clock.or(line.pending.clock);
             line.pending.commands.extend(parsed.commands);
         }
         ControlFlow::Continue(())
@@ -580,11 +616,12 @@ impl Writer<'_> {
         self.tokens.push(format!("{{ {text} }}"));
     }
 
-    /// The node's comments, its shapes and commands appended to the last one (or in a
-    /// comment of their own). Returns whether anything was written.
+    /// The node's comments, its shapes, commands and clock appended to the last one (or in
+    /// a comment of their own), in chessops' order. Returns whether anything was written.
     fn comments(&mut self, node: &NodeData) -> bool {
         let mut extras = write_shapes(&node.shapes);
         extras.extend(node.commands.iter().cloned());
+        extras.extend(node.clock.map(write_clock));
         let mut texts: Vec<String> = node.comments.iter().filter_map(|c| clean_comment(c)).collect();
         if !extras.is_empty() {
             match texts.last_mut() {
@@ -819,6 +856,16 @@ impl Chapter {
             return Err(ScacchiError::InvalidEdit { reason: format!("square {bad} is off the board") });
         }
         node.shapes = shapes.into_iter().map(|s| DrawShape { to: s.to.filter(|&to| to != s.from), ..s }).collect();
+        Ok(())
+    }
+
+    /// The mover's time left after the move, in seconds, written as `[%clk]`; None removes
+    /// it. Written to the millisecond, so round it first for whole seconds.
+    pub fn set_clock(&self, id: u32, seconds: Option<f64>) -> Result<(), ScacchiError> {
+        if let Some(bad) = seconds.filter(|s| !s.is_finite() || *s < 0.0) {
+            return Err(ScacchiError::InvalidEdit { reason: format!("clock {bad} isn't a time left") });
+        }
+        self.lock().get_mut(id)?.clock = seconds;
         Ok(())
     }
 

@@ -44,7 +44,8 @@ struct ChapterTests {
         let c3 = try chapter.node(id: main[6])
         #expect(c3.annotations == Annotations(moveMark: nil, positionSign: .equal, others: []))
         #expect(c3.comments == ["Quiet."])
-        #expect(c3.commands == ["[%clk 0:03:00]"])
+        #expect(c3.clock == 180)
+        #expect(c3.commands == [])
     }
 
     @Test func roundTrips() throws {
@@ -68,11 +69,13 @@ struct ChapterTests {
         try chapter.setComments(id: chapter.root(), comments: ["Mine."])
         try chapter.setAnnotations(id: e4, annotations: Annotations(moveMark: .good, positionSign: nil, others: [146]))
         try chapter.setShapes(id: e5, shapes: [DrawShape(brush: .red, from: 53, to: nil)])
+        try chapter.setClock(id: e5, seconds: 9.4)
         try chapter.setTag(name: "ChapterName", value: "Mine")
+        #expect(try chapter.node(id: e5).clock == 9.4)
         #expect(chapter.pgn() == """
             [ChapterName "Mine"]
 
-            { Mine. } 1. e4! $146 (1. d4) 1... e5 { [%csl Rf7] } *
+            { Mine. } 1. e4! $146 (1. d4) 1... e5 { [%csl Rf7] [%clk 0:00:09.4] } *
 
             """)
 

@@ -49,11 +49,13 @@ node.moveNumber; node.side; node.fen
 node.comments                             // after the move; startingComments before it
 node.annotations                          // moveMark (!?), positionSign (±), others ($146)
 node.shapes                               // [%cal]/[%csl]: DrawShape(brush: .green, from: 12, to: 28)
-node.commands                             // other [%…], kept as read: ["[%clk 0:03:00]"]
+node.clock                                // [%clk 0:03:00]: the mover's time left, 180 (seconds)
+node.commands                             // other [%…], kept as read: ["[%eval 0.17]"]
 
 let id = try chapter.addMove(after: node.id, uci: "e7e5")  // the same move steps forward
 try chapter.setComments(id: id, comments: ["The classical reply."])
 try chapter.setAnnotations(id: id, annotations: Annotations(moveMark: .good, positionSign: nil, others: []))
+try chapter.setClock(id: id, seconds: 178)
 chapter.pgn()                             // writeStudy(chapters:) for several
 ```
 

@@ -207,7 +207,8 @@ fn parse_comment_cases() {
     // apart, raw.
     let parsed = parse_comment("foo [%bar] [%csl Ga1] [%cal Ra1h1,Gb1b8] [%clk 3:25:45]");
     assert_eq!(parsed.text.as_deref(), Some("foo"));
-    assert_eq!(parsed.commands, ["[%bar]", "[%clk 3:25:45]"]);
+    assert_eq!(parsed.commands, ["[%bar]"]);
+    assert_eq!(parsed.clock, Some(3.0 * 3600.0 + 25.0 * 60.0 + 45.0));
     assert_eq!(parsed.shapes.len(), 3);
 }
 

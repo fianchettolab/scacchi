@@ -60,6 +60,15 @@ doesn't repeat them.
   - **Shapes belong to the node**, read from any comment with chessops' syntax and written
     in order (a new `%csl`/`%cal` each time the kind changes). Other `[%…]` commands are
     kept raw in `commands` and written back after the shapes, in the last comment.
+  - **The clock is the node's too,** as in chessops: `clock`, the mover's time left in
+    seconds, from `[%clk H:MM:SS]` in any comment, the last one winning (the root's from
+    the opening comment), and set with `setClock`. Within chessops' limits, so a clock
+    always reads back as written: 1–5 digits of hours, 1–2 of minutes and seconds, up to
+    three decimals, at most 99999:59:59.999; outside them a `[%clk]` stays raw in
+    `commands`, and `setClock` refuses it. `setClock` keeps the millisecond, as it's
+    written. Written last, after the other commands, as `H:MM:SS` with decimals only when
+    there are any (`0:00:09.4`). Reading trims spaces chessops wouldn't. `Node` is
+    `PartialEq` only, for the `f64`.
   - **Tags** are kept in order, except FEN and SetUp, which come from the root position
     and are written when it isn't the standard start. A Variant other than standard is an
     error. A movetext result with no Result tag becomes one.

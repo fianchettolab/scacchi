@@ -497,6 +497,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    public static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -618,6 +634,13 @@ public protocol ChapterProtocol: AnyObject, Sendable {
      * field when that's empty. Only moves have annotations, so not the root.
      */
     func setAnnotations(id: UInt32, annotations: Annotations) throws 
+    
+    /**
+     * The mover's time left after the move, in seconds, written as `[%clk]`; None removes
+     * it. Kept to the millisecond, as it's written, so round it first for whole seconds.
+     * Up to 99999:59:59.999, the most PGN's clock holds.
+     */
+    func setClock(id: UInt32, seconds: Double?) throws 
     
     /**
      * The comments after the move (for the root, the chapter's opening comment). Each is
@@ -834,6 +857,21 @@ open func setAnnotations(id: UInt32, annotations: Annotations)throws   {try rust
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(id),
         FfiConverterTypeAnnotations_lower(annotations),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The mover's time left after the move, in seconds, written as `[%clk]`; None removes
+     * it. Kept to the millisecond, as it's written, so round it first for whole seconds.
+     * Up to 99999:59:59.999, the most PGN's clock holds.
+     */
+open func setClock(id: UInt32, seconds: Double?)throws   {try rustCallWithError(FfiConverterTypeScacchiError_lift) {
+        uniffiCallStatus in
+    uniffi_scacchi_fn_method_chapter_set_clock(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(id),
+        FfiConverterOptionDouble.lower(seconds),uniffiCallStatus
     )
 }
 }
@@ -1468,7 +1506,12 @@ public struct Node: Equatable, Hashable {
     public var annotations: Annotations
     public var shapes: [DrawShape]
     /**
-     * Other `[%…]` commands (`[%eval 0.17]`, `[%clk 0:03:00]`), raw, written back as read.
+     * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`. The root's
+     * comes from the chapter's opening comment, as chessops reads it.
+     */
+    public var clock: Double?
+    /**
+     * Other `[%…]` commands (`[%eval 0.17]`), raw, written back as read.
      */
     public var commands: [String]
 
@@ -1499,7 +1542,11 @@ public struct Node: Equatable, Hashable {
          * Comments before the move, only at the first move of a variation.
          */startingComments: [String], annotations: Annotations, shapes: [DrawShape], 
         /**
-         * Other `[%…]` commands (`[%eval 0.17]`, `[%clk 0:03:00]`), raw, written back as read.
+         * The mover's time left after the move, in seconds, from `[%clk 0:03:00]`. The root's
+         * comes from the chapter's opening comment, as chessops reads it.
+         */clock: Double?, 
+        /**
+         * Other `[%…]` commands (`[%eval 0.17]`), raw, written back as read.
          */commands: [String]) {
         self.id = id
         self.parent = parent
@@ -1512,6 +1559,7 @@ public struct Node: Equatable, Hashable {
         self.startingComments = startingComments
         self.annotations = annotations
         self.shapes = shapes
+        self.clock = clock
         self.commands = commands
     }
 
@@ -1542,6 +1590,7 @@ public struct FfiConverterTypeNode: FfiConverterRustBuffer {
                 startingComments: FfiConverterSequenceString.read(from: &buf), 
                 annotations: FfiConverterTypeAnnotations.read(from: &buf), 
                 shapes: FfiConverterSequenceTypeDrawShape.read(from: &buf), 
+                clock: FfiConverterOptionDouble.read(from: &buf), 
                 commands: FfiConverterSequenceString.read(from: &buf)
         )
     }
@@ -1558,6 +1607,7 @@ public struct FfiConverterTypeNode: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.startingComments, into: &buf)
         FfiConverterTypeAnnotations.write(value.annotations, into: &buf)
         FfiConverterSequenceTypeDrawShape.write(value.shapes, into: &buf)
+        FfiConverterOptionDouble.write(value.clock, into: &buf)
         FfiConverterSequenceString.write(value.commands, into: &buf)
     }
 }
@@ -2607,6 +2657,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -2967,6 +3041,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_chapter_set_annotations() != 8769) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_scacchi_checksum_method_chapter_set_clock() != 25599) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_scacchi_checksum_method_chapter_set_comments() != 14113) {

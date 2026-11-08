@@ -99,7 +99,8 @@ fn reads_a_lichess_chapter() {
     let c3 = chapter.node(main[6]).unwrap();
     assert_eq!(c3.annotations, Annotations { move_mark: None, position_sign: Some(PositionSign::Equal), others: vec![] });
     assert_eq!(c3.comments, ["Quiet."]);
-    assert_eq!(c3.commands, ["[%clk 0:03:00]", "[%eval 0.25]"]);
+    assert_eq!(c3.clock, Some(180.0));
+    assert_eq!(c3.commands, ["[%eval 0.25]"]);
     assert_eq!(c3.fen, "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R b KQkq - 0 4");
 
     let nf6 = find(&chapter, "Nf6");
@@ -134,7 +135,7 @@ fn writes_a_lichess_chapter() {
 { The Italian. [%csl Ge4] [%cal Ge2e4] } 1. e4 e5 2. Nf3 Nc6 3. Bc4
 { [%cal Gc4f7,Rd8h4] } 3... Bc5 (3... Nf6!? { Two knights. } 4. Ng5 d5 5. exd5
 Na5 (5... Nxd5?! 6. Nxf7!? $132) 6. Bb5+) 4. c3 $10
-{ Quiet. [%clk 0:03:00] [%eval 0.25] } *
+{ Quiet. [%eval 0.25] [%clk 0:03:00] } *
 "#
     );
     assert!(pgn.lines().all(|line| line.len() <= 80));
@@ -188,6 +189,91 @@ fn shapes_and_commands() {
     assert!(e4.comments.is_empty());
     let pgn = assert_round_trip(&chapter);
     assert!(pgn.contains("1. e4 { [%csl Bd4] [%cal Ga1a2,Re5e6] } *"), "{pgn}");
+}
+
+#[test]
+fn clocks() {
+    for (args, seconds) in [
+        ("0:03:00", Some(180.0)),
+        ("1:02:03", Some(3723.0)),
+        ("0:00:09.4", Some(9.4)),
+        (" 10:00:00 ", Some(36_000.0)),
+        ("0:00:07.", Some(7.0)),
+        ("3:ê5:", None),
+        ("0:03", None),
+        ("0:03:00:00", None),
+        ("-0:03:00", None),
+        ("0:03:00 later", None),
+        // chessops' limits, so a clock always reads back as it was written.
+        ("0:00:09.4567", None),
+        ("0:00:00.0005", None),
+        ("99999:59:59.999", Some(MAX_CLOCK)),
+        ("100000:00:00", None),
+        ("99999:99:99", None),
+        ("0:000:00", None),
+        ("0:00:9", Some(9.0)),
+        ("99999999999999999999:00:00", None),
+        // Summed as floats, these came out a hair off.
+        ("0:01:01.029", Some(61.029)),
+        ("0:00:75.04", Some(75.04)),
+    ] {
+        assert_eq!(parse_clock(args), seconds, "{args}");
+    }
+    for (seconds, written) in [
+        (0.0, "[%clk 0:00:00]"),
+        (180.0, "[%clk 0:03:00]"),
+        (3723.0, "[%clk 1:02:03]"),
+        (9.4, "[%clk 0:00:09.4]"),
+        (59.9996, "[%clk 0:01:00]"),
+        (0.125, "[%clk 0:00:00.125]"),
+        (36_000.0, "[%clk 10:00:00]"),
+    ] {
+        assert_eq!(write_clock(seconds), written, "{seconds}");
+    }
+
+    // Read from any comment, written last in the move's last one, as chessops orders it.
+    let chapter = one("1. e4 { [%clk 0:05:02] Fast. [%eval 0.3] } 1... e5 { [%clk 0:04:58] } { Slow. } 2. Nf3 { [%clk x] } *");
+    let main = chapter.mainline(0).unwrap();
+    let (e4, e5, nf3) = (chapter.node(main[0]).unwrap(), chapter.node(main[1]).unwrap(), chapter.node(main[2]).unwrap());
+    assert_eq!((e4.clock, e4.comments.clone(), e4.commands.clone()), (Some(302.0), vec!["Fast.".to_owned()], vec!["[%eval 0.3]".to_owned()]));
+    assert_eq!((e5.clock, e5.comments.clone()), (Some(298.0), vec!["Slow.".to_owned()]));
+    assert_eq!((nf3.clock, nf3.commands.clone()), (None, vec!["[%clk x]".to_owned()]));
+    let pgn = assert_round_trip(&chapter);
+    assert!(pgn.replace('\n', " ").contains("1. e4 { Fast. [%eval 0.3] [%clk 0:05:02] } 1... e5 { Slow. [%clk 0:04:58] } 2. Nf3 { [%clk x] } *"), "{pgn}");
+
+    // Set on a new chapter, a game as Lichess exports it; None removes it.
+    let chapter = Chapter::new();
+    let e4 = chapter.add_move(0, "e2e4".into()).unwrap();
+    let e5 = chapter.add_move(e4, "e7e5".into()).unwrap();
+    chapter.set_clock(e4, Some(182.0)).unwrap();
+    chapter.set_clock(e5, Some(9.4)).unwrap();
+    assert_eq!(assert_round_trip(&chapter), "\n1. e4 { [%clk 0:03:02] } 1... e5 { [%clk 0:00:09.4] } *\n");
+    chapter.set_clock(e5, None).unwrap();
+    assert_eq!(chapter.node(e5).unwrap().clock, None);
+    assert_eq!(chapter.pgn(), "\n1. e4 { [%clk 0:03:02] } 1... e5 *\n");
+    // Read back exactly as set, even where adding the parts as floats would drift.
+    for seconds in [61.029, 75.04, 3599.999, 12_345.678] {
+        chapter.set_clock(e5, Some(seconds)).unwrap();
+        assert_round_trip(&chapter);
+        assert_eq!(one(&chapter.pgn()).node(e5).unwrap().clock, Some(seconds), "{seconds}");
+    }
+    let canonical = one("1. e4 { [%clk 0:00:75.04] } *");
+    assert_eq!(canonical.node(1).unwrap().clock, Some(75.04));
+    assert_round_trip(&canonical);
+
+    // Kept to the millisecond, as it's written.
+    chapter.set_clock(e5, Some(0.00049)).unwrap();
+    assert_eq!(chapter.node(e5).unwrap().clock, Some(0.0));
+    chapter.set_clock(e5, Some(MAX_CLOCK)).unwrap();
+    assert!(assert_round_trip(&chapter).contains("[%clk 99999:59:59.999]"));
+    // A clock out of range stays raw, and round-trips that way.
+    let raw = one("1. e4 { [%clk 0:00:09.4567] } *");
+    assert_eq!((raw.node(1).unwrap().clock, raw.node(1).unwrap().commands), (None, vec!["[%clk 0:00:09.4567]".to_owned()]));
+    assert_round_trip(&raw);
+    for bad in [-1.0, f64::NAN, f64::INFINITY, MAX_CLOCK + 0.001, 1e300] {
+        assert!(matches!(chapter.set_clock(e4, Some(bad)), Err(ScacchiError::InvalidEdit { .. })));
+    }
+    assert!(matches!(chapter.set_clock(99, Some(1.0)), Err(ScacchiError::UnknownNode { id: 99 })));
 }
 
 #[test]

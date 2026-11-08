@@ -213,6 +213,9 @@ fn clocks() {
         ("0:000:00", None),
         ("0:00:9", Some(9.0)),
         ("99999999999999999999:00:00", None),
+        // Summed as floats, these came out a hair off.
+        ("0:01:01.029", Some(61.029)),
+        ("0:00:75.04", Some(75.04)),
     ] {
         assert_eq!(parse_clock(args), seconds, "{args}");
     }
@@ -248,6 +251,16 @@ fn clocks() {
     chapter.set_clock(e5, None).unwrap();
     assert_eq!(chapter.node(e5).unwrap().clock, None);
     assert_eq!(chapter.pgn(), "\n1. e4 { [%clk 0:03:02] } 1... e5 *\n");
+    // Read back exactly as set, even where adding the parts as floats would drift.
+    for seconds in [61.029, 75.04, 3599.999, 12_345.678] {
+        chapter.set_clock(e5, Some(seconds)).unwrap();
+        assert_round_trip(&chapter);
+        assert_eq!(one(&chapter.pgn()).node(e5).unwrap().clock, Some(seconds), "{seconds}");
+    }
+    let canonical = one("1. e4 { [%clk 0:00:75.04] } *");
+    assert_eq!(canonical.node(1).unwrap().clock, Some(75.04));
+    assert_round_trip(&canonical);
+
     // Kept to the millisecond, as it's written.
     chapter.set_clock(e5, Some(0.00049)).unwrap();
     assert_eq!(chapter.node(e5).unwrap().clock, Some(0.0));

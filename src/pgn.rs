@@ -321,7 +321,7 @@ struct ParsedComment {
 }
 
 /// The longest clock PGN can hold: chessops reads at most five digits of hours.
-const MAX_CLOCK: f64 = 99_999.0 * 3600.0 + 59.0 * 60.0 + 59.999;
+const MAX_CLOCK: f64 = 359_999_999_999.0 / 1000.0;
 
 /// `[%clk 1:02:03]` or `[%clk 0:00:09.4]`'s time, in seconds, within chessops' limits: 1–5
 /// digits of hours, 1–2 of minutes and of seconds, up to three decimals, and no more than
@@ -335,7 +335,11 @@ fn parse_clock(args: &str) -> Option<f64> {
     if parts.next().is_some() || !digits(h, 5) || !digits(m, 2) || !digits(whole, 2) || !fraction_ok {
         return None;
     }
-    let seconds = h.parse::<f64>().ok()? * 3600.0 + m.parse::<f64>().ok()? * 60.0 + s.parse::<f64>().ok()?;
+    // Whole milliseconds, divided once: the value `set_clock`'s rounding gives, so a clock
+    // reads back exactly as it was set (adding the parts as floats drifts, 60 + 1.029).
+    let n = |p: &str| p.parse::<u64>().ok();
+    let millis = n(h)? * 3_600_000 + n(m)? * 60_000 + n(whole)? * 1000 + n(&format!("{fraction:0<3}"))?;
+    let seconds = millis as f64 / 1000.0;
     (seconds <= MAX_CLOCK).then_some(seconds)
 }
 
